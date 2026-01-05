@@ -1,4 +1,4 @@
-# Core dependencies (install openwakeword without tflite dependency)
+# Core dependencies for ONNX inference only
 numpy>=1.24.0
 pyaudio>=0.2.13
 onnxruntime>=1.16.0
@@ -7,6 +7,4 @@ scikit-learn>=1.0.0
 requests>=2.0.0
 tqdm>=4.0.0
 
-# Install openwakeword without dependencies to avoid tflite conflict
-# (we only use ONNX inference, not TFLite)
-openwakeword>=0.5.0 --no-deps
+# Note: openwakeword is installed via setup.sh with --no-deps to avoid tflite conflict
