@@ -34,22 +34,25 @@ echo "[4/4] Installing dependencies..."
 # Install core dependencies first
 pip install numpy pyaudio onnxruntime scipy scikit-learn requests tqdm pyyaml
 
-# Install openwakeword without dependencies (avoids tflite conflict)
-pip install --no-deps openwakeword>=0.5.0
+# Install openwakeword (with dependencies to get all resource files)
+pip install 'openwakeword>=0.5.0'
 
-# Copy feature extraction models from training project
-echo "[5/5] Copying feature extraction models..."
-MODELS_SRC="/home/localuser/source/reachy/openWakeWord/openwakeword/resources/models"
-MODELS_DST="venv/lib/python3.12/site-packages/openwakeword/resources/models"
+# Download feature extraction models
+echo "[5/5] Downloading feature extraction models..."
+python -c "
+from openwakeword.utils import download_models
+import os
 
-if [ -d "$MODELS_SRC" ]; then
-    mkdir -p "$MODELS_DST"
-    cp "$MODELS_SRC"/*.onnx "$MODELS_DST/"
-    echo "✓ Models copied (melspectrogram.onnx, embedding_model.onnx)"
-else
-    echo "⚠ Warning: Could not find models in training project"
-    echo "   You may need to copy them manually"
-fi
+# Find the openwakeword installation directory
+import openwakeword
+models_dir = os.path.join(os.path.dirname(openwakeword.__file__), 'resources', 'models')
+os.makedirs(models_dir, exist_ok=True)
+
+# Download all required models
+print('Downloading models...')
+download_models(target_directory=models_dir)
+print('✓ Models downloaded successfully')
+"
 
 echo ""
 echo "✓ Setup complete!"
