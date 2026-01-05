@@ -50,8 +50,13 @@ Self-contained wake word detection testing application for Reachy robot.
 
 ### Adjust threshold:
 ```bash
+# Command line (temporary)
 ./run.sh --threshold 0.4  # More sensitive
 ./run.sh --threshold 0.6  # Less sensitive
+
+# Or edit config.yaml (permanent)
+# Change: threshold: 0.5
+# To:     threshold: 0.4
 ```
 
 ## Troubleshooting

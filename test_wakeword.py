@@ -11,6 +11,7 @@ import time
 import sys
 import os
 import select
+import yaml
 
 def find_reachy_microphone():
     """Auto-detect Reachy's microphone or use PulseAudio"""
@@ -207,18 +208,47 @@ def test_wake_word(device_index, threshold=0.5):
         mic_stream.close()
         audio.terminate()
 
+def load_config(config_path=None):
+    """Load configuration from config.yaml"""
+    if config_path is None:
+        config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
+
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+                print(f"✓ Loaded config from: {config_path}")
+                return config or {}
+        except Exception as e:
+            print(f"Warning: Could not load {config_path}: {e}")
+    return {}
+
 if __name__ == "__main__":
     import argparse
 
+    # Load config file first
+    config = load_config()
+
     parser = argparse.ArgumentParser(description="Reachy Wake Word Tester")
-    parser.add_argument("--device", type=int, default=None,
-                       help="Specific device index to use")
-    parser.add_argument("--threshold", type=float, default=0.5,
-                       help="Detection threshold (default: 0.5)")
+    parser.add_argument("--device", type=int, default=config.get('device_index'),
+                       help="Specific device index to use (default: auto-detect or from config)")
+    parser.add_argument("--threshold", type=float, default=config.get('threshold', 0.5),
+                       help="Detection threshold (default: 0.5 or from config.yaml)")
+    parser.add_argument("--config", type=str, default=None,
+                       help="Path to custom config file")
     parser.add_argument("--list-devices", action="store_true",
                        help="List all available audio devices")
 
     args = parser.parse_args()
+
+    # Load custom config if specified
+    if args.config:
+        config = load_config(args.config)
+        if not args.device and 'device_index' in config:
+            args.device = config['device_index']
+        # Threshold from command line takes priority
+        if '--threshold' not in sys.argv and 'threshold' in config:
+            args.threshold = config['threshold']
 
     # List devices if requested
     if args.list_devices:

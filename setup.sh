@@ -32,7 +32,7 @@ pip install --upgrade pip
 echo "[4/4] Installing dependencies..."
 
 # Install core dependencies first
-pip install numpy pyaudio onnxruntime scipy scikit-learn requests tqdm
+pip install numpy pyaudio onnxruntime scipy scikit-learn requests tqdm pyyaml
 
 # Install openwakeword without dependencies (avoids tflite conflict)
 pip install --no-deps openwakeword>=0.5.0

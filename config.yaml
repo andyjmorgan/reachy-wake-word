@@ -1,0 +1,20 @@
+# Reachy Wake Word Detection Configuration
+
+# Detection threshold (0.0 - 1.0)
+# Lower = more sensitive (more detections, more false positives)
+# Higher = less sensitive (fewer false positives, might miss some)
+threshold: 0.5
+
+# Cooldown between detections (seconds)
+# Prevents multiple triggers for single utterance
+cooldown: 2.0
+
+# Audio device
+# Set to specific device number, or null for auto-detection
+# Run with --list-devices to see available devices
+device_index: null
+
+# Chunk size (samples)
+# Smaller = lower latency, higher CPU
+# Larger = higher latency, lower CPU
+chunk_size: 1280  # 80ms at 16kHz
