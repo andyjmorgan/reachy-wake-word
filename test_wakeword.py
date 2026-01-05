@@ -12,6 +12,8 @@ import sys
 import os
 import select
 import yaml
+import termios
+import tty
 
 def find_reachy_microphone():
     """Auto-detect Reachy's microphone or use PulseAudio"""
@@ -114,7 +116,7 @@ def test_wake_word(device_index, threshold=0.5):
     print(f"  Score > {threshold}  : DETECTION! 🔥")
     print("="*80)
     print("\nSay 'reachy' to test...")
-    print("Press Ctrl+C to stop | Press 'c' then Enter to clear console\n")
+    print("Press Ctrl+C to stop | Press 'c' to clear console\n")
 
     # Detection loop
     detection_count = 0
@@ -123,13 +125,17 @@ def test_wake_word(device_index, threshold=0.5):
     max_score_seen = 0.0
     scores_buffer = []
 
+    # Set terminal to raw mode for single-char input
+    old_settings = termios.tcgetattr(sys.stdin)
     try:
+        tty.setcbreak(sys.stdin.fileno())
+
         while True:
             # Check for keyboard input (non-blocking)
             if select.select([sys.stdin], [], [], 0.0)[0]:
                 key = sys.stdin.read(1)
                 if key.lower() == 'c':
-                    os.system('clear' if os.name == 'posix' else 'cls')
+                    print("\033[2J\033[H")  # Clear screen + home
                     print("Console cleared - listening...\n")
 
             # Get audio
@@ -172,38 +178,35 @@ def test_wake_word(device_index, threshold=0.5):
                 detection_count += 1
                 last_detection = current_time
 
-                print(f"\n\n{'▼'*80}")
-                print(f"  🎤 WAKE WORD DETECTED!")
-                print(f"  Detection #{detection_count}")
-                print(f"  Score: {score:.3f}")
-                print(f"{'▲'*80}\n")
+                # One-line compact detection
+                timestamp = time.strftime('%H:%M:%S')
+                print(f"\n[{timestamp}] 🎤 Detection #{detection_count} | Score: {score:.3f}")
+                print(f"\rScore: {score:.3f} │{bar}│ {status}", end='', flush=True)
 
     except KeyboardInterrupt:
         print("\n\n" + "="*80)
-        print("TESTING STOPPED")
+        print("STOPPED")
         print("="*80)
-        print(f"Total Detections: {detection_count}")
-        print(f"Max Score Seen: {max_score_seen:.3f}")
+        print(f"Detections: {detection_count} | Threshold: {threshold} | Max Score: {max_score_seen:.3f}")
 
         if scores_buffer:
-            print(f"Average Score: {np.mean(scores_buffer):.3f}")
+            avg = np.mean(scores_buffer)
+            print(f"Avg: {avg:.3f} | Range: {np.min(scores_buffer):.3f}-{np.max(scores_buffer):.3f}")
 
-        print("\n💡 Recommendations:")
+        # Compact recommendations
         if max_score_seen < threshold and max_score_seen > 0:
             suggested = max(0.3, max_score_seen * 0.9)
-            print(f"   - Max score ({max_score_seen:.3f}) didn't reach threshold ({threshold})")
-            print(f"   - Try: python test_wakeword.py --threshold {suggested:.2f}")
+            print(f"\n💡 Try: ./run.sh --threshold {suggested:.2f}")
         elif detection_count == 0:
-            print(f"   - Check microphone volume in pavucontrol")
-            print(f"   - Speak clearly: 'REE-chee'")
-        elif detection_count < 5:
-            print(f"   - Try different pronunciations")
-        else:
-            print(f"   - ✓ Model working well!")
+            print(f"\n💡 No detections - check mic volume")
+        elif detection_count >= 5:
+            print(f"\n✓ Working well!")
 
         print("="*80)
 
     finally:
+        # Restore terminal settings
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
         mic_stream.stop_stream()
         mic_stream.close()
         audio.terminate()
