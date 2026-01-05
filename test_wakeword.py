@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""
+Reachy Wake Word Tester - Auto-detecting version
+Automatically finds Reachy's microphone and tests wake word detection
+"""
+
+import pyaudio
+import numpy as np
+from openwakeword.model import Model
+import time
+import sys
+import os
+import select
+
+def find_reachy_microphone():
+    """Auto-detect Reachy's microphone or use PulseAudio"""
+    audio = pyaudio.PyAudio()
+
+    # Priority order for device selection
+    search_terms = [
+        ("pulse", "PulseAudio"),
+        ("pipewire", "PipeWire"),
+        ("default", "System Default"),
+        ("reachy mini audio", "Reachy Mini Audio"),
+        ("reachy", "Reachy Device")
+    ]
+
+    print("Searching for Reachy's microphone...")
+
+    for search_term, description in search_terms:
+        for i in range(audio.get_device_count()):
+            try:
+                info = audio.get_device_info_by_index(i)
+                if info['maxInputChannels'] > 0:
+                    if search_term in info['name'].lower():
+                        print(f"✓ Found: {description}")
+                        print(f"  Device #{i}: {info['name']}")
+                        print(f"  Channels: {info['maxInputChannels']}")
+                        print(f"  Sample Rate: {info['defaultSampleRate']} Hz\n")
+                        audio.terminate()
+                        return i, info
+            except:
+                continue
+
+    # Fallback to first available input device
+    print("⚠ Could not find preferred device, using first available input...")
+    for i in range(audio.get_device_count()):
+        try:
+            info = audio.get_device_info_by_index(i)
+            if info['maxInputChannels'] > 0:
+                print(f"  Device #{i}: {info['name']}\n")
+                audio.terminate()
+                return i, info
+        except:
+            continue
+
+    audio.terminate()
+    print("❌ No input devices found!")
+    sys.exit(1)
+
+def test_wake_word(device_index, threshold=0.5):
+    """Run wake word detection"""
+
+    # Find model file
+    model_path = os.path.join(os.path.dirname(__file__), "reachy.onnx")
+    if not os.path.exists(model_path):
+        print(f"❌ Model not found: {model_path}")
+        sys.exit(1)
+
+    # Initialize audio
+    audio = pyaudio.PyAudio()
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    RATE = 16000
+    CHUNK = 1280
+
+    try:
+        mic_stream = audio.open(
+            format=FORMAT,
+            channels=CHANNELS,
+            rate=RATE,
+            input=True,
+            frames_per_buffer=CHUNK,
+            input_device_index=device_index
+        )
+    except Exception as e:
+        print(f"❌ Failed to open microphone: {e}")
+        print("\nTry running with a specific device:")
+        print("  python test_wakeword.py --device <number>")
+        audio.terminate()
+        sys.exit(1)
+
+    # Load model
+    print("Loading wake word model...")
+    try:
+        owwModel = Model(wakeword_models=[model_path], inference_framework="onnx")
+        print("✓ Model loaded!\n")
+    except Exception as e:
+        print(f"❌ Failed to load model: {e}")
+        mic_stream.close()
+        audio.terminate()
+        sys.exit(1)
+
+    # Display info
+    print("="*80)
+    print("REACHY WAKE WORD DETECTOR")
+    print("="*80)
+    print(f"Threshold: {threshold}")
+    print(f"Wake Word: 'reachy'")
+    print("\nLegend:")
+    print("  Score < 0.3  : Background/silence")
+    print("  Score 0.3-0.4: Possibly similar word")
+    print(f"  Score > {threshold}  : DETECTION! 🔥")
+    print("="*80)
+    print("\nSay 'reachy' to test...")
+    print("Press Ctrl+C to stop | Press 'c' then Enter to clear console\n")
+
+    # Detection loop
+    detection_count = 0
+    last_detection = 0
+    cooldown = 2.0
+    max_score_seen = 0.0
+    scores_buffer = []
+
+    try:
+        while True:
+            # Check for keyboard input (non-blocking)
+            if select.select([sys.stdin], [], [], 0.0)[0]:
+                key = sys.stdin.read(1)
+                if key.lower() == 'c':
+                    os.system('clear' if os.name == 'posix' else 'cls')
+                    print("Console cleared - listening...\n")
+
+            # Get audio
+            audio_data = np.frombuffer(
+                mic_stream.read(CHUNK, exception_on_overflow=False),
+                dtype=np.int16
+            )
+
+            # Get prediction
+            prediction = owwModel.predict(audio_data)
+            score = prediction["reachy"]
+
+            # Track scores
+            scores_buffer.append(score)
+            if len(scores_buffer) > 100:
+                scores_buffer.pop(0)
+
+            max_score_seen = max(max_score_seen, score)
+
+            # Visual score bar
+            bar_length = int(min(score, 1.0) * 60)
+            bar = "█" * bar_length + "░" * (60 - bar_length)
+
+            # Status indicator
+            if score > threshold:
+                status = "🔥 DETECTED!"
+            elif score > 0.4:
+                status = "⚠️  CLOSE   "
+            elif score > 0.3:
+                status = "👀 MAYBE   "
+            else:
+                status = "   ...     "
+
+            # Print live score
+            print(f"\rScore: {score:.3f} │{bar}│ {status}", end='', flush=True)
+
+            # Detection with cooldown
+            current_time = time.time()
+            if score > threshold and (current_time - last_detection) > cooldown:
+                detection_count += 1
+                last_detection = current_time
+
+                print(f"\n\n{'▼'*80}")
+                print(f"  🎤 WAKE WORD DETECTED!")
+                print(f"  Detection #{detection_count}")
+                print(f"  Score: {score:.3f}")
+                print(f"{'▲'*80}\n")
+
+    except KeyboardInterrupt:
+        print("\n\n" + "="*80)
+        print("TESTING STOPPED")
+        print("="*80)
+        print(f"Total Detections: {detection_count}")
+        print(f"Max Score Seen: {max_score_seen:.3f}")
+
+        if scores_buffer:
+            print(f"Average Score: {np.mean(scores_buffer):.3f}")
+
+        print("\n💡 Recommendations:")
+        if max_score_seen < threshold and max_score_seen > 0:
+            suggested = max(0.3, max_score_seen * 0.9)
+            print(f"   - Max score ({max_score_seen:.3f}) didn't reach threshold ({threshold})")
+            print(f"   - Try: python test_wakeword.py --threshold {suggested:.2f}")
+        elif detection_count == 0:
+            print(f"   - Check microphone volume in pavucontrol")
+            print(f"   - Speak clearly: 'REE-chee'")
+        elif detection_count < 5:
+            print(f"   - Try different pronunciations")
+        else:
+            print(f"   - ✓ Model working well!")
+
+        print("="*80)
+
+    finally:
+        mic_stream.stop_stream()
+        mic_stream.close()
+        audio.terminate()
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Reachy Wake Word Tester")
+    parser.add_argument("--device", type=int, default=None,
+                       help="Specific device index to use")
+    parser.add_argument("--threshold", type=float, default=0.5,
+                       help="Detection threshold (default: 0.5)")
+    parser.add_argument("--list-devices", action="store_true",
+                       help="List all available audio devices")
+
+    args = parser.parse_args()
+
+    # List devices if requested
+    if args.list_devices:
+        audio = pyaudio.PyAudio()
+        print("\nAvailable Input Devices:")
+        print("="*80)
+        for i in range(audio.get_device_count()):
+            info = audio.get_device_info_by_index(i)
+            if info['maxInputChannels'] > 0:
+                print(f"Device #{i}: {info['name']}")
+                print(f"  Channels: {info['maxInputChannels']}")
+                print(f"  Sample Rate: {info['defaultSampleRate']} Hz\n")
+        audio.terminate()
+        sys.exit(0)
+
+    # Auto-detect or use specified device
+    if args.device is not None:
+        device_index = args.device
+        print(f"Using specified device #{device_index}\n")
+    else:
+        device_index, _ = find_reachy_microphone()
+
+    # Run test
+    test_wake_word(device_index, args.threshold)
