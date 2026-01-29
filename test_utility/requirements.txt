@@ -1,0 +1,11 @@
+# Core dependencies for ONNX inference only
+numpy>=1.24.0
+pyaudio>=0.2.13
+onnxruntime>=1.16.0
+scipy>=1.3.0
+scikit-learn>=1.0.0
+requests>=2.0.0
+tqdm>=4.0.0
+pyyaml>=6.0.0
+
+# Note: openwakeword is installed via setup.sh with --no-deps to avoid tflite conflict
