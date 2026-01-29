@@ -13,6 +13,8 @@ openWakeWord is an open-source wakeword library that can be used to create voice
 
 # Fork: Reachy Wake Word Training
 
+![Reachy Wake Word Training](https://cdn-uploads.huggingface.co/production/uploads/671faa3a541a76b548647676/uEa13KsL5wtQREVZ1ixwc.png)
+
 This fork contains custom training experiments for the "reachy" wake word used by the Reachy robot. We achieved **98.15% accuracy** through systematic experimentation.
 
 **See [TRAINING_SUMMARY.md](TRAINING_SUMMARY.md) for full experiment results.**
